@@ -27,6 +27,7 @@ const teste2 = async () => {
     // // await productsController.teste3()
     await productsController.handleGenerateCSV();
     // await productsController.deleteAllProducts();
+    // await productsController.getProductsTiny();
     //getproducts
     //atulizaprodutos
     //atualizaestoque

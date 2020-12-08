@@ -3,13 +3,12 @@ require('dotenv/config');
 const qs = require('qs');
 const moment = require('moment')
 import productsModel from '../models/productsModel'
+const mail = require('../config/mail');
 
 import { ExportToCsv } from 'export-to-csv';
 
 const urlProdutos = 'https://api.tiny.com.br/api2/produtos.pesquisa.php'
 const urlEstoque = 'https://api.tiny.com.br/api2/produto.obter.estoque.php'
-const urlProdutosAlterados = 'https://api.tiny.com.br/api2/lista.atualizacoes.produtos'
-const urlEstoquesAlterados = 'https://api.tiny.com.br/api2/lista.atualizacoes.estoque'
 
 let initialDataBodyProdutos = {
     token: process.env.TOKEN_API_TINY,
@@ -23,13 +22,6 @@ let initialDataBodyEstoque = {
     formato: 'json',
 }
 
-let initialDataBodyProdutosAlterados = {
-    token: process.env.TOKEN_API_TINY,
-    dataAlteracao: moment().format('DD/MM/YYYY'),
-    formato: 'json',
-}
-
-
 const timer = ms => new Promise(res => setTimeout(res, ms))
 
 const getProductsFirstPageTiny = async () => {
@@ -38,14 +30,7 @@ const getProductsFirstPageTiny = async () => {
             const response = (await axios.post(urlProdutos, qs.stringify(initialDataBodyProdutos))).data.retorno;
             const numero_paginas = response.numero_paginas
 
-            // if(response.erros.length > 0) {
-            //     for(erro of response.erros) {
-            //         console.log('erro: ', erro)
-            //     }
-            //     return;
-            // }
-
-            for (let cont = 0; cont < response.produtos.length; cont++){ //trocar length para 3
+            for (let cont = 0; cont < response.produtos.length; cont++){
                 let produto = response.produtos[cont].produto
 
                 let produtoExistente = await productsModel.findOne({id: produto.id}).exec()
@@ -56,16 +41,6 @@ const getProductsFirstPageTiny = async () => {
                     
                     await productsModel.create(produto)  
                     
-                    // let productData = {
-                    //     name: produto.nome,
-                    //     code: produto.id,
-                    //     sku: produto.codigo,
-                    //     price: parseFloat(produto.preco)*100,
-                    //     facet_values: [{ id: produto.id }]
-                    // }
-    
-                    // await insereProdutoPeopleCommerce(productData)
-
                     await getEstoqueTiny(produto.id)
                 }
             }
@@ -119,12 +94,6 @@ const getEstoqueTiny = async (produto_id) => {
     try {
         const responseEstoque = (await axios.post(urlEstoque, qs.stringify({...initialDataBodyEstoque, id: produto_id}))).data.retorno;
 
-        // if(responseEstoque.erros.length > 0) {
-        //     for(erro of response.erros) {
-        //         console.log('erro: ', erro)
-        //     }
-        //     return;
-        // }
         for (let cont = 0; cont < responseEstoque.produto.depositos.length; cont++) {
 
             await productsModel.findOneAndUpdate({id: produto_id}, {saldo: responseEstoque.produto.saldo, saldo_reservado: responseEstoque.produto.saldoReservado, depositos: responseEstoque.produto.depositos[cont].deposito})
@@ -155,10 +124,6 @@ const getProductsTiny = async () => {
     }
 }
 
-const teste3 = async () => {
-
-}
-
 const deleteAllProducts = async () => {
     try {
         productsModel.deleteMany({}).then(function(){ 
@@ -182,15 +147,49 @@ const optionsCSV = {
     useTextFile: false,
     useBom: true,
     useKeysAsHeaders: false,
-    headers: ['Produto', 'Estoque físico', 'Estoque reservado', 'Unidade', 'Estoque Mínimo', 'Localização',]
+    headers: ['Código (SKU)', 'Produto', 'Estoque físico', 'Estoque reservado', 'Unidade', 'Estoque Mínimo', 'Localização',]
   };
 
-const csvExporter = new ExportToCsv(optionsCSV);
+  const csvExporter = new ExportToCsv(optionsCSV);
+
+  const csvExporterPlanilha = (data) => {
+    let newObj = []
+    
+    data.map((item, index) => {
+        newObj[index] = {
+            codigo: item.codigo,
+            produto: item.nome,
+            estoque_fisico: item.saldo ? item.saldo : '',
+            estoque_reservado: item.saldo_reservado ? item.saldo_reservado : '',
+            unidade: item.unidade,
+            estoque_minimo:'',
+            localizacao: item.localizacao,
+        }
+    })
+     
+       return csvExporter.generateCsv(newObj, true)
+    }
+
 
 const handleGenerateCSV = async () => {
     try {
         let data = await productsModel.find();
-        console.log("🚀 ~ file: productsController.js ~ line 213 ~ handleGenerateCSV ~ data", data)
+        let csv = csvExporterPlanilha(data)
+        console.log("🚀 ~ file: productsController.js ~ line 195 ~ handleGenerateCSV ~ csv", csv)
+
+        mail.sendMail({
+            to: ['gustavofraga@teste.com.br'],
+            from: 'gustavofraga@teste.com.br',
+            subject: `Planilha`,
+            template: 'planilha',
+            attachments : [
+                {
+                    filename: 'teste.csv',
+                    content: csv
+                }
+            ],
+        });
+        
     } catch(error) {
 
     }
@@ -199,70 +198,6 @@ const handleGenerateCSV = async () => {
 module.exports = {
     getProductsTiny,
     getProductsFirstPageTiny,
-    teste3,
     deleteAllProducts,
     handleGenerateCSV
 }
-//verifica todos ids para inclusao / remocao -> rodar periodicamente
-//depois rodar apenas nas paginas atualizadas . 2 metoods.
-
-//ficar rodando método 1 para ver se o produto foi inserido ou removido
-//ficar rodando método 2 (produto & estoque) para verificar a alteração
-
-
-//getProducts -> criando todos produtos e atualizando todos estoques
-
-//verificar alterações de estoque -> atualizaProdutos ok ->?
-
-//verificar alterações de produto
-
-
-
-// const csvExporter = (data) => {
-//     console.log("exportarCSV -> data", data)
-//     let newObj = []
-
-//     data.dadosComissao.map((item, index) => {
-//         newObj[index] = {
-//             representante_id: item.representante_razao_social || item.representante_nome,
-//             grupo: item.grupo_id,
-//             associado: item.associado_razao_social || item.associado_nome,
-//             placa: item.placa,
-//             data_pagamento: moment(item.pagamento).format('DD/MM/YYYY'),
-//             tipo: item.tipo,
-//             valor_recebido: (item.valor_mensalidade > 0) ? parseFloat(item.valor_mensalidade.toFixed(2)) : '' ,
-//             porcentagem_valor: item.valor_mensalidade ? 10.00 : 0.2,
-//             valor_comissao: parseFloat(item.valor_comissao.toFixed(2)),
-//         }
-//     })
-
-//         // newObj.sort(function(a,b){
-//         //     a = a.associado_id;
-//         //     b = b.associado_id;
-//         //     return a-b;
-//         // });
-//         newObj.push({
-//             representante_id: '',
-//             grupo:'',
-//             associado: '',
-//             placa:'',
-//             data_pagamento: '',
-//             tipo: '',
-//             valor_recebido: '',
-//             porcentagem_valor: '',
-//             valor_comissao: '',
-//         })
-        
-//         newObj.push({
-//             representante_id: 'TOTAL:',
-//             grupo:'',
-//             associado: '',
-//             placa:'',
-//             data_pagamento: '',
-//             tipo: '',
-//             valor_recebido: '',
-//             porcentagem_valor: '',
-//             valor_comissao: parseFloat(data.total_valor_comissao.toFixed(2)),
-//         })
-//         csvExporterLaudosEVistorias.generateCsv(newObj)
-//     }
