@@ -21,18 +21,12 @@ db.once('open', function() {
 });
 
 const teste2 = async () => {
-    // await productsController.insereProdutoPeopleCommerce(({name: 'teste', code: '2801FG.331/253'}))
-    // await productsController.getProductsFirstPageTiny()
-    // await productsController.getProductsFirstPageTiny()
-    // // await productsController.teste3()
-    await productsController.handleGenerateCSV();
     // await productsController.deleteAllProducts();
     // await productsController.getProductsTiny();
-    //getproducts
-    //atulizaprodutos
-    //atualizaestoque
-    // console.log("teste", teste)
+    await productsController.handleGenerateCSV();
+    // await productsController.getEstoqueMinimo();
 }
+
 teste2();
 
 //worker ->

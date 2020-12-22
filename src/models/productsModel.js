@@ -56,6 +56,10 @@ const schema = new Schema(
             type: Number,
             required: false
         },
+        estoque_minimo: {
+            type: Number,
+            required: false
+        },
         depositos: [
             {
                 nome: String,

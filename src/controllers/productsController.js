@@ -1,14 +1,21 @@
-const axios = require('axios')
 require('dotenv/config');
-const qs = require('qs');
-const moment = require('moment')
-import productsModel from '../models/productsModel'
-const mail = require('../config/mail');
 
 import { ExportToCsv } from 'export-to-csv';
+import productsModel from '../models/productsModel'
+import estoqueMinimoModel from '../models/estoqueMinimoModel'
+
+const axios = require('axios')
+const qs = require('qs');
+const moment = require('moment')
+const mail = require('../config/mail');
+const excelToJson = require('convert-excel-to-json');
+const fs = require('fs');
+const path = require('path');
 
 const urlProdutos = 'https://api.tiny.com.br/api2/produtos.pesquisa.php'
 const urlEstoque = 'https://api.tiny.com.br/api2/produto.obter.estoque.php'
+
+const timer = ms => new Promise(res => setTimeout(res, ms))
 
 let initialDataBodyProdutos = {
     token: process.env.TOKEN_API_TINY,
@@ -22,7 +29,19 @@ let initialDataBodyEstoque = {
     formato: 'json',
 }
 
-const timer = ms => new Promise(res => setTimeout(res, ms))
+const optionsCSV = { 
+    fieldSeparator: ';',
+    quoteStrings: '"',
+    decimalSeparator: '.',
+    showLabels: true, 
+    showTitle: false,
+    useTextFile: false,
+    useBom: true,
+    useKeysAsHeaders: false,
+    headers: ['Código (SKU)', 'Produto', 'Estoque físico', 'Estoque reservado', 'Unidade', 'Estoque Mínimo', 'Localização',]
+  };
+
+const csvExporter = new ExportToCsv(optionsCSV);
 
 const getProductsFirstPageTiny = async () => {
     return new Promise(async (resolve, reject) => {
@@ -39,7 +58,13 @@ const getProductsFirstPageTiny = async () => {
                 } else {
                     console.log('criando produto!')
                     
-                    await productsModel.create(produto)  
+                    await productsModel.create(produto)
+                    
+                    let estoque_minimo = await estoqueMinimoModel.findOne({codigo: produto.codigo}).exec()
+                    if (estoque_minimo) {
+                        console.log("🚀 ~ file: productsController.js ~ line 64 ~ returnnewPromise ~ estoque_minimo", estoque_minimo)
+                        await productsModel.findOneAndUpdate({id: produto.id}, {estoque_minimo: estoque_minimo.quantidade})
+                    }
                     
                     await getEstoqueTiny(produto.id)
                 }
@@ -75,6 +100,12 @@ const getProductsOtherPagesTiny = async (numero_paginas) => {
                     } else {
                         console.log('criando produto!')
                         await productsModel.create(produto)
+
+                        let estoque_minimo = await estoqueMinimoModel.findOne({codigo: produto.codigo}).exec()
+                        if (estoque_minimo) {
+                            console.log("🚀 ~ file: productsController.js ~ line 64 ~ returnnewPromise ~ estoque_minimo", estoque_minimo)
+                            await productsModel.findOneAndUpdate({id: produto.id}, {estoque_minimo: estoque_minimo.quantidade})
+                        }
 
                         await getEstoqueTiny(produto.id)
                     }
@@ -137,24 +168,9 @@ const deleteAllProducts = async () => {
     }
 }
 
-
-const optionsCSV = { 
-    fieldSeparator: ';',
-    quoteStrings: '"',
-    decimalSeparator: '.',
-    showLabels: true, 
-    showTitle: false,
-    useTextFile: false,
-    useBom: true,
-    useKeysAsHeaders: false,
-    headers: ['Código (SKU)', 'Produto', 'Estoque físico', 'Estoque reservado', 'Unidade', 'Estoque Mínimo', 'Localização',]
-  };
-
-  const csvExporter = new ExportToCsv(optionsCSV);
-
-  const csvExporterPlanilha = (data) => {
+const csvExporterPlanilha = (data) => {
     let newObj = []
-    
+
     data.map((item, index) => {
         newObj[index] = {
             codigo: item.codigo,
@@ -162,14 +178,13 @@ const optionsCSV = {
             estoque_fisico: item.saldo ? item.saldo : '',
             estoque_reservado: item.saldo_reservado ? item.saldo_reservado : '',
             unidade: item.unidade,
-            estoque_minimo:'',
+            estoque_minimo: item.estoque_minimo || '',
             localizacao: item.localizacao,
         }
     })
-     
-       return csvExporter.generateCsv(newObj, true)
-    }
-
+    
+    return csvExporter.generateCsv(newObj, true)
+}
 
 const handleGenerateCSV = async () => {
     try {
@@ -195,9 +210,30 @@ const handleGenerateCSV = async () => {
     }
 }
 
+const getEstoqueMinimo = async () => {
+    try {
+        const result = excelToJson({
+            source: fs.readFileSync(path.resolve('./src/templates/estoque_minimo.xlsx')) // fs.readFileSync return a Buffer
+        });
+        let planilha = result.Planilha1
+        console.log("🚀 ~ file: productsController.js ~ line 208 ~ getEstoqueMinimo ~ planilha", planilha)
+        
+        for (let cont = 1; cont < planilha.length; cont++) {
+            let item = planilha[cont]
+            await estoqueMinimoModel.create({codigo: item.A, quantidade: item.B || 0})  
+            console.log('item:', {codigo: item.A, quantidade: item.B})
+        }
+
+    } catch(error) {
+        console.log('error', error)
+    }
+}
+
+
 module.exports = {
     getProductsTiny,
     getProductsFirstPageTiny,
     deleteAllProducts,
-    handleGenerateCSV
+    handleGenerateCSV,
+    getEstoqueMinimo
 }
