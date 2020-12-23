@@ -9,7 +9,7 @@ const qs = require('qs');
 const mail = require('../config/mail');
 const fs = require('fs');
 const path = require('path');
-
+const env = require('../config/env')
 const urlProdutos = 'https://api.tiny.com.br/api2/produtos.pesquisa.php'
 const urlEstoque = 'https://api.tiny.com.br/api2/produto.obter.estoque.php'
 
@@ -18,14 +18,14 @@ const xlsxDirectory = path.resolve('src/assets/planilha-tiny.xlsx')
 const timer = ms => new Promise(res => setTimeout(res, ms))
 
 let initialDataBodyProdutos = {
-    token: process.env.TOKEN_API_TINY,
+    token: env.TOKEN_API_TINY,
     pesquisa: '',
     pagina: 1,
     formato: 'json'
 }    
 
 let initialDataBodyEstoque = {
-    token: process.env.TOKEN_API_TINY,
+    token: env.TOKEN_API_TINY,
     formato: 'json',
 }
 
@@ -228,6 +228,7 @@ const handleSendPlanilha = async () => {
         console.log('error', error)
     }
 }
+
 module.exports = {
     getProductsTiny,
     getProductsFirstPageTiny,

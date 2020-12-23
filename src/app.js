@@ -2,12 +2,12 @@ require('dotenv/config');
 const express = require('express');
 const mongoose = require('mongoose');
 const productsController = require('./controllers/productsController')
-
+const env = require('./config/env')
 require('./config/worker')
 
 const app = express();
 
-mongoose.connect(process.env.MONGO_URL, {
+mongoose.connect(env.MONGO_URL, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
@@ -38,4 +38,4 @@ teste2();
     // getProductsTiny() 17h
     // geraCSV  e envia 18h
 
-export default app;
+module.exports = app;
