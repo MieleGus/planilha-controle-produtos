@@ -15,4 +15,4 @@ const schema = new Schema(
     },
 );
 
-export default mongoose.model('estoque_minimos', schema);
+module.exports = mongoose.model('estoque_minimos', schema)

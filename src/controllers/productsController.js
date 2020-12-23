@@ -1,19 +1,19 @@
 require('dotenv/config');
 
-import { ExportToCsv } from 'export-to-csv';
-import productsModel from '../models/productsModel'
-import estoqueMinimoModel from '../models/estoqueMinimoModel'
-
+const productsModel = require('../models/productsModel')
+const estoqueMinimoModel = require('../models/estoqueMinimoModel')
+const json2xls = require('json2xls');
+const excelToJson = require('convert-excel-to-json');
 const axios = require('axios')
 const qs = require('qs');
-const moment = require('moment')
 const mail = require('../config/mail');
-const excelToJson = require('convert-excel-to-json');
 const fs = require('fs');
 const path = require('path');
 
 const urlProdutos = 'https://api.tiny.com.br/api2/produtos.pesquisa.php'
 const urlEstoque = 'https://api.tiny.com.br/api2/produto.obter.estoque.php'
+
+const xlsxDirectory = path.resolve('src/assets/planilha-tiny.xlsx')
 
 const timer = ms => new Promise(res => setTimeout(res, ms))
 
@@ -28,20 +28,6 @@ let initialDataBodyEstoque = {
     token: process.env.TOKEN_API_TINY,
     formato: 'json',
 }
-
-const optionsCSV = { 
-    fieldSeparator: ';',
-    quoteStrings: '"',
-    decimalSeparator: '.',
-    showLabels: true, 
-    showTitle: false,
-    useTextFile: false,
-    useBom: true,
-    useKeysAsHeaders: false,
-    headers: ['Código (SKU)', 'Produto', 'Estoque físico', 'Estoque reservado', 'Unidade', 'Estoque Mínimo', 'Localização',]
-  };
-
-const csvExporter = new ExportToCsv(optionsCSV);
 
 const getProductsFirstPageTiny = async () => {
     return new Promise(async (resolve, reject) => {
@@ -157,56 +143,17 @@ const getProductsTiny = async () => {
 
 const deleteAllProducts = async () => {
     try {
+        console.log('chegeou delete all products')
         productsModel.deleteMany({}).then(function(){ 
             console.log("Data deleted"); 
         }).catch(function(error){ 
             console.log(error); 
         }); 
+        console.log('53253252 products')
+        
     } catch(error) {
         console.log("error delete all products", error)
         
-    }
-}
-
-const csvExporterPlanilha = (data) => {
-    let newObj = []
-
-    data.map((item, index) => {
-        newObj[index] = {
-            codigo: item.codigo,
-            produto: item.nome,
-            estoque_fisico: item.saldo ? item.saldo : '',
-            estoque_reservado: item.saldo_reservado ? item.saldo_reservado : '',
-            unidade: item.unidade,
-            estoque_minimo: item.estoque_minimo || '',
-            localizacao: item.localizacao,
-        }
-    })
-    
-    return csvExporter.generateCsv(newObj, true)
-}
-
-const handleGenerateCSV = async () => {
-    try {
-        let data = await productsModel.find();
-        let csv = csvExporterPlanilha(data)
-        console.log("🚀 ~ file: productsController.js ~ line 195 ~ handleGenerateCSV ~ csv", csv)
-
-        mail.sendMail({
-            to: ['gustavofraga@teste.com.br'],
-            from: 'gustavofraga@teste.com.br',
-            subject: `Planilha`,
-            template: 'planilha',
-            attachments : [
-                {
-                    filename: 'teste.csv',
-                    content: csv
-                }
-            ],
-        });
-        
-    } catch(error) {
-
     }
 }
 
@@ -230,10 +177,61 @@ const getEstoqueMinimo = async () => {
 }
 
 
+const handleCreateXlsx = (data) => {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let newObj = []
+
+            data.map((item, index) => {
+                newObj[index] = {
+                    codigo: item.codigo,
+                    produto: item.nome,
+                    estoque_fisico: item.saldo ? item.saldo : '',
+                    estoque_reservado: item.saldo_reservado ? item.saldo_reservado : '',
+                    unidade: item.unidade,
+                    estoque_minimo: item.estoque_minimo || '',
+                    localizacao: item.localizacao,
+                }
+            })
+            var xlsx = json2xls(newObj);
+            fs.writeFileSync(xlsxDirectory, xlsx, 'binary');
+
+            resolve(xlsx)
+
+        } catch(error){
+            reject(error)
+        }
+    })
+}
+
+const handleSendPlanilha = async () => {
+    try {
+        let data = await productsModel.find();
+        await handleCreateXlsx(data);
+
+        let xlsxBuffer = fs.readFileSync(xlsxDirectory);
+
+        mail.sendMail({
+            to: ['gustavofraga@teste.com.br'],
+            from: 'gustavofraga@teste.com.br',
+            subject: `Planilha Tiny`,
+            template: 'planilha',
+            attachments : [
+                {
+                    filename: `planilha-tiny.xlsx`,
+                    content: xlsxBuffer
+                }
+            ],
+        });
+        
+    } catch(error) {
+        console.log('error', error)
+    }
+}
 module.exports = {
     getProductsTiny,
     getProductsFirstPageTiny,
     deleteAllProducts,
-    handleGenerateCSV,
+    handleSendPlanilha,
     getEstoqueMinimo
 }

@@ -3,6 +3,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const productsController = require('./controllers/productsController')
 
+require('./config/worker')
+
 const app = express();
 
 mongoose.connect(process.env.MONGO_URL, {
@@ -23,8 +25,9 @@ db.once('open', function() {
 const teste2 = async () => {
     // await productsController.deleteAllProducts();
     // await productsController.getProductsTiny();
-    await productsController.handleGenerateCSV();
-    // await productsController.getEstoqueMinimo();
+    // await productsController.handleSendPlanilha();
+
+    // await productsController.getEstoqueMinimo(); //
 }
 
 teste2();
@@ -32,7 +35,7 @@ teste2();
 //worker ->
     // deleteallProducts 17h
     // 
-    // getProductsTiny()
-    // geraCSV  e envia
+    // getProductsTiny() 17h
+    // geraCSV  e envia 18h
 
 export default app;

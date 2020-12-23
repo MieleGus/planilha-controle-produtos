@@ -78,4 +78,4 @@ const schema = new Schema(
     }
 );
 
-export default mongoose.model('Products', schema);
+module.exports = mongoose.model('Products', schema);
